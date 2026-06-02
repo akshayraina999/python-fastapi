@@ -1,0 +1,58 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: python-fastapi-service
+  namespace: devops-tools
+  labels:
+    app: python-fastapi-app
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: python-fastapi-app
+  template:
+    metadata:
+      labels:
+        app: python-fastapi-app
+      annotations:
+        # 🛡️ HAS_HASHICORP_VAULT_INJECTION_CONFIG
+        vault.hashicorp.com/agent-inject: "true"
+        vault.hashicorp.com/role: "python-app-role"
+        vault.hashicorp.com/agent-inject-secret-db-creds: "secret/data/mysql/config"
+        # 🕸️ ISTIO_SERVICE_MESH_INJECTION_CONFIG
+        sidecar.istio.io/inject: "true"
+    spec:
+      containers:
+      - name: python-container
+        # Image tag will be updated automatically by GitHub Actions CI later
+        image: harbor-core.devops-tools.svc.cluster.local:80/apps/python-fastapi-service:latest
+        imagePullPolicy: IfNotPresent
+        ports:
+        - containerPort: 8000
+        readinessProbe:
+          httpGet:
+            path: /healthz
+            port: 8000
+          initialDelaySeconds: 5
+          periodSeconds: 10
+        livenessProbe:
+          httpGet:
+            path: /healthz
+            port: 8000
+          initialDelaySeconds: 10
+          periodSeconds: 20
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: python-fastapi-service
+  namespace: devops-tools
+  labels:
+    app: python-fastapi-app
+spec:
+  ports:
+  - port: 8000
+    targetPort: 8000
+    name: http
+  selector:
+    app: python-fastapi-app
